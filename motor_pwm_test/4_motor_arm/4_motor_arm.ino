@@ -16,27 +16,31 @@
 class servo_set {
   public:
 
-    servo_set(int num_of_servo, int* degrees_of_servo) { // constructor
+    servo_set(int num_of_servo, int* init_degree) { // constructor, init #servo and starting degree
       this->message_length = num_of_servo * 3 + 7; // total message length including 0x55 0x55
       this->num_of_servo = num_of_servo;
-      servo_degrees = degrees_of_servo;
-
+      this->servo_degrees = new int[num_of_servo]; // stores current degree of servo;
+      this->zero_points = new int[num_of_servo];  // stores origin of each srvo
+      for (int i = 0; i < num_of_servo; i++) {
+        servo_degrees[i] = init_degree[i];
+        zero_points[i] = init_degree[i];
+      }
+      send_message(2);
     }
 
-    void move_single_servo(int servo_num, int dt, int &degree) { // move to certain degree
-
-      if (degree < 0) degree = 0;
-      if (degree > 1000) degree = 1000;
-      servo_degrees[servo_num - 1] = degree;
+    void move_single_servo(int servo_num, int dt, int dtheta) { // move to certain degree
+      servo_degrees[servo_num] += dtheta; // servo_num starts from zero
+      if (servo_degrees[servo_num] < 0) servo_degrees[servo_num] = 0;
+      if (servo_degrees[servo_num] > 1000) servo_degrees[servo_num] = 1000;
       send_message(dt);
     }
 
     void move_radii(float dr, int dt) {   // input amount of distance you want to move
       float k = (float)(1000 - servo_degrees[0]) / 1000;
-      servo_degrees[0] += int (4 * k * dr);
-      servo_degrees[1] -= dr;
+      //servo_degrees[0] += int (4 * k * dr);
+      servo_degrees[1] += dr;
       servo_degrees[2] += dr;
-      servo_degrees[3] += int (4 * k * dr) - 2 * dr;
+      servo_degrees[3] += dr;
       for (int i = 0; i < 4; i++) {
         if (servo_degrees[i] < 0) {
           Serial.write('no');
@@ -52,10 +56,10 @@ class servo_set {
 
     void move_height(float dh, int dt) {  // input amount of distance you want to move
 
-      servo_degrees[0] -= dh;
+      servo_degrees[1] -= dh;
       servo_degrees[2] += dh;
-      servo_degrees[3] -= 2 * dh;
-      for (int i = 0; i < 4; i++) {
+      servo_degrees[3] -= 1.5 * dh;
+      for (int i = 0; i < num_of_servo; i++) {
         if (servo_degrees[i] < 0) servo_degrees[i] = 0;
         if (servo_degrees[i] > 1000) servo_degrees[i] = 1000;
       }
@@ -63,11 +67,11 @@ class servo_set {
     }
 
     void move_to_origin() {
-      int degree[6] = {500, 500, 500, 500};//{500, 120, 150, 500};
-      for (int i = 0; i < 6; i++) {
-        servo_degrees[i] = degree[i];
+
+      for (int i = 0; i < num_of_servo; i++) {
+        servo_degrees[i] = zero_points[i];
       }
-      move_single_servo(1, 1500, degree[0]);
+      move_single_servo(1, 1500, 0); // call this function to move all servo
     }
 
     void send_message(int dt) {
@@ -75,7 +79,7 @@ class servo_set {
       int base_length = 7;
 
       for (int i = 0; i < num_of_servo; i++) {
-        message[base_length] = i + 1;
+        message[base_length] = i; // servo num, starts from 0
         message[base_length + 1] = servo_degrees[i];
         message[base_length + 2] = servo_degrees[i] >> 8;
         base_length += 3;
@@ -87,10 +91,55 @@ class servo_set {
   private:
     int message_length = 0;
     int num_of_servo = 0;
-    float radii = 0;
-    float height = 0;
-    int *servo_degrees; // this pointer links an array of degrees outside of this class, not a good practice but that's what it is right now
+
+    int *servo_degrees; // stores current servo degree.
+    int *zero_points;   // zero points for set original
 };
+
+class my_servo {
+  public:
+    my_servo(Servo &ser, int lb, int zero, int ub) {
+      s = ser;
+      //s.write(zero);
+      this->zero_point = zero;
+      this->servo_degree = zero;
+      lower_bound = lb;
+      upper_bound = ub;
+    }
+
+    void move_by(int dx, int dt = 5) {
+
+      servo_degree += dx;
+      if (servo_degree > upper_bound) servo_degree = upper_bound;
+      if (servo_degree < lower_bound) servo_degree = lower_bound;
+      s.write(servo_degree);
+      delay(dt);
+    }
+    void move_to(int degree, int dx = 1) {
+      if (servo_degree - degree > 0) dx = -2;
+      else dx = 2;
+      while (abs(servo_degree - degree) > 5) {
+        servo_degree += dx;
+        delay(30);
+        s.write(servo_degree);
+      }
+      servo_degree = degree;
+      s.write(servo_degree);
+    }
+
+    void move_to_origin() {
+      move_to(zero_point);
+    }
+  private:
+    Servo s;
+    int servo_pin;
+    int servo_degree;
+    int zero_point;
+    int lower_bound, upper_bound;
+};
+
+
+
 
 //*********************** function declaration *****************************//
 void ps2_setup();
@@ -98,33 +147,44 @@ void ps2_setup();
 float Polar_Angle(float, float);  //y, x
 float Polar_Length(float, float);
 
-int error = 0; // ps2 controller status
+// ps2 controller status
+int error = 0;
 byte type = 0;
 byte vibrate = 0;
 
 PS2X ps2x;
-Servo myservo;  // claw servo
+Servo myservo;  // claw clamp servo
+Servo claw_rotate;
 
-int claw_pos = 0;
-int degree[6] = {500, 500, 500, 500}; // stores degrees of servos, links to "servo_set" class
+// mg996 s
+my_servo claw(myservo, 140, 170, 180); // pin ,lower bound, zero, upper bound
+my_servo claw_rotation(claw_rotate, 20, 85, 150);
 
-// move_height, base, change_radii,
+//int claw_pos = 170;
+//int claw_rotation = 85; // init claw ratation pos
+
+// servo class initialization
+int degree[4] = {500, 470, 150, 150};  // init servo degrees;
+servo_set test(4, degree);
+
+// two speed array for different speed mode
 const int normal[] = {3, 5, 4};
 const int fine_tune[] = {1, 1, 1};
 int* servo_speed = normal;
 
-servo_set test(4, degree); // numbers of servo, the array to store degrees of servos
+// startup
+
 
 //*********************** setup *****************************//
 void setup() {
 
   Serial.begin(9600);
-  ps2_setup();
-  myservo.attach(3);
-  myservo.write(0);
+  myservo.attach(4);
+  claw_rotate.attach(3);
 
-  //*********************PIN MODE*************************
-  for (int i = 0; i < 6; i++)  test.move_single_servo(i + 1, 1000, degree[i]);
+  claw.move_to_origin();
+  claw_rotation.move_to_origin();
+  ps2_setup();
 }
 
 
@@ -179,22 +239,23 @@ void loop() {
   } else {
 
     if (left_joystick_angle < 22.5 || left_joystick_angle >= 337.5) {
-      // nothing right now
+
+      test.move_single_servo(0, 1, -2); // base_rotation
       return;
 
     } else if (left_joystick_angle >= 67.5 && left_joystick_angle < 112.5) {
 
-      test.move_height(servo_speed[0], 20);
+      test.move_radii(5, 2);;
       return;
 
     } else if (left_joystick_angle >= 157.5 && left_joystick_angle < 202.5) {
 
-      // nothing right now
+      test.move_single_servo(0, 1, 2); // base_rotation
       return;
 
     } else if (left_joystick_length > 200 && left_joystick_angle >= 247.5 && left_joystick_angle < 292.5) {
 
-      test.move_height(-servo_speed[0], 20);
+      test.move_radii(-5, 2);
       return;
     }
 
@@ -202,68 +263,66 @@ void loop() {
     /// right joystick
     if (right_joystick_angle < 22.5 || right_joystick_angle >= 337.5) {  // right-right
 
-      degree[5] -= servo_speed[1];
-      test.move_single_servo(0, 1, degree[5]); // base_rotation
+      test.move_single_servo(0, 1, -2); // base_rotation
       return;
 
     } else if (right_joystick_angle >= 67.5 && right_joystick_angle < 112.5) { // right-up
 
-      test.move_radii(servo_speed[2], 5);
+      test.move_height(2, 20);
       return;
 
     } else if (right_joystick_angle >= 157.5 && right_joystick_angle < 202.5) { // right-left
 
-      degree[5] += servo_speed[1];
-      test.move_single_servo(0, 1, degree[5]); // base_rotation
+      test.move_single_servo(0, 1, 2);
       return;
 
     } else if (right_joystick_angle >= 247.5 && right_joystick_angle < 292.5) { // right-down
-      test.move_radii(-servo_speed[2], 5);
+
+      test.move_height(-2, 20);
       return;
     }
   }
 
   if (ps2x.ButtonPressed(PSB_CIRCLE)) {
-    if(servo_speed == normal) servo_speed = fine_tune;
+    if (servo_speed == normal) servo_speed = fine_tune;
     else servo_speed = normal;
     Serial.println("speed changed");
     delay(25);
   }
-  
+
   if (ps2x.ButtonPressed(PSB_SQUARE)) {
     test.move_to_origin();
     servo_speed = normal;
+    claw.move_to_origin();
+    claw_rotation.move_to_origin();
     delay(25);
   }
 
-
   if (ps2x.Button(PSB_R2)) {
 
-    claw_pos += 5;
-    if (claw_pos > 60) claw_pos = 60;
-    myservo.write(claw_pos);
-    delay(50);
+    claw.move_by(2);
 
   }  else if (ps2x.Button(PSB_L2)) {
-    claw_pos -= 5;
-    if (claw_pos < 0) claw_pos = 0;
-    myservo.write(claw_pos);
-    delay(50);
+    claw.move_by(-2);
   }
 
   if (ps2x.Button(PSB_R1)) { // claw rotation
-
-    degree[4] += 5;
-    test.move_single_servo(5, 1, degree[4]);
-    return;
+    claw_rotation.move_by(2);
 
   }  else if (ps2x.Button(PSB_L1)) {
-
-    degree[4] -= 5;
-    test.move_single_servo(5, 1, degree[4]);
-    return;
+    claw_rotation.move_by(-2);
   }
 }
+
+
+
+
+
+
+
+
+
+
 
 
 
