@@ -157,13 +157,10 @@ Servo myservo;  // claw clamp servo
 Servo claw_rotate;
 
 // mg996 s
-my_servo claw(myservo, 140, 170, 180); // pin ,lower bound, zero, upper bound
+my_servo claw(myservo, 140, 170, 180); // servo ,lower bound, zero, upper bound
 my_servo claw_rotation(claw_rotate, 20, 85, 150);
 
-//int claw_pos = 170;
-//int claw_rotation = 85; // init claw ratation pos
-
-// servo class initialization
+// LeArm servo class initialization
 int degree[4] = {500, 470, 150, 150};  // init servo degrees;
 servo_set test(4, degree);
 
@@ -240,7 +237,8 @@ void loop() {
 
     if (left_joystick_angle < 22.5 || left_joystick_angle >= 337.5) {
 
-      test.move_single_servo(0, 1, -2); // base_rotation
+      // base_rotation
+      test.move_single_servo(0, 1, -2); // servo, dt, dx
       return;
 
     } else if (left_joystick_angle >= 67.5 && left_joystick_angle < 112.5) {
@@ -250,7 +248,8 @@ void loop() {
 
     } else if (left_joystick_angle >= 157.5 && left_joystick_angle < 202.5) {
 
-      test.move_single_servo(0, 1, 2); // base_rotation
+      // base_rotation
+      test.move_single_servo(0, 1, 2);
       return;
 
     } else if (left_joystick_length > 200 && left_joystick_angle >= 247.5 && left_joystick_angle < 292.5) {
@@ -263,16 +262,18 @@ void loop() {
     /// right joystick
     if (right_joystick_angle < 22.5 || right_joystick_angle >= 337.5) {  // right-right
 
-      test.move_single_servo(0, 1, -2); // base_rotation
+      // base_rotation
+      test.move_single_servo(0, 1, -2);
       return;
 
     } else if (right_joystick_angle >= 67.5 && right_joystick_angle < 112.5) { // right-up
 
-      test.move_height(2, 20);
+      test.move_height(2, 20); // dx, dt
       return;
 
     } else if (right_joystick_angle >= 157.5 && right_joystick_angle < 202.5) { // right-left
 
+      // base_rotation
       test.move_single_servo(0, 1, 2);
       return;
 
@@ -290,7 +291,7 @@ void loop() {
     delay(25);
   }
 
-  if (ps2x.ButtonPressed(PSB_SQUARE)) {
+  if (ps2x.ButtonPressed(PSB_SQUARE)) { // zeroing whole system
     test.move_to_origin();
     servo_speed = normal;
     claw.move_to_origin();
@@ -298,20 +299,18 @@ void loop() {
     delay(25);
   }
 
-  if (ps2x.Button(PSB_R2)) {
-
+  if (ps2x.Button(PSB_R2)) { // claw open, close
     claw.move_by(2);
-
-  }  else if (ps2x.Button(PSB_L2)) {
+  } else if (ps2x.Button(PSB_L2)) {
     claw.move_by(-2);
   }
 
   if (ps2x.Button(PSB_R1)) { // claw rotation
     claw_rotation.move_by(2);
-
   }  else if (ps2x.Button(PSB_L1)) {
     claw_rotation.move_by(-2);
   }
+
 }
 
 
