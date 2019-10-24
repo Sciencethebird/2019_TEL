@@ -176,11 +176,13 @@ int* servo_speed = normal;
 void setup() {
 
   Serial.begin(9600);
+  
   myservo.attach(4);
   claw_rotate.attach(3);
 
   claw.move_to_origin();
   claw_rotation.move_to_origin();
+  
   ps2_setup();
 }
 
