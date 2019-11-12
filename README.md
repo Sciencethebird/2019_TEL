@@ -2,8 +2,8 @@
 
 TEL, Robot Competition
 
-## 4_motor_arm
----
+### 4_motor_arm
+
 Serial Servo Robot Arm
 
 - using serial servos form LeArm
@@ -19,3 +19,5 @@ Arm Controll
 ---
 - fixed height movement (claw position)
 - fixed radius movement (claw position)
+- memorize various starting position
+- Prevents servos from out-of-range movement automatically
