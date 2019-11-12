@@ -7,6 +7,7 @@ TEL, Robot Competition
 Serial Servo Robot Arm
 
 - using serial servos form LeArm
+- UART communication and LeArm Communication Protocal
 - Arduino Mega 2560
 - controlled by PS2 dualshock wireless controller 
 
